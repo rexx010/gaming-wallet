@@ -1,0 +1,55 @@
+# -----------------------------------------------------------------------
+# CONCEPT — .gitignore:
+# Git tracks every file in your project by default. .gitignore tells git
+# to pretend certain files/folders don't exist. They won't be staged,
+# committed, or pushed — even if you run `git add .`
+# IMPORTANT: If a file was ALREADY committed before being added to
+# .gitignore, git still tracks it. You must run:
+#   git rm --cached <filename>
+# to untrack it (removes from git index without deleting the file).
+# -----------------------------------------------------------------------
+
+# Maven build output — never commit compiled code
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# -----------------------------------------------------------------------
+# SECRET FILES — The most important section
+# -----------------------------------------------------------------------
+# Local credentials — contains real DB passwords and API keys
+application-local.properties
+*-local.properties
+
+# Any .env files (if you ever use them)
+.env
+.env.*
+!.env.example
+
+# -----------------------------------------------------------------------
+# IDE files — personal to each developer, not part of the project
+# -----------------------------------------------------------------------
+
+### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+
+### VS Code ###
+.vscode/
+
+### Eclipse ###
+.classpath
+.project
+.settings/
+
+### NetBeans ###
+/nbproject/private/
+nbdist/
+/.nb-gradle/
+
+# -----------------------------------------------------------------------
+# OS files
+# -----------------------------------------------------------------------
+.DS_Store
+Thumbs.db

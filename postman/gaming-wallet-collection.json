@@ -1,0 +1,147 @@
+{
+  "info": {
+    "name": "Gaming Wallet — Spotflow Integration",
+    "description": "Full test collection. Run requests top-to-bottom — Postman test scripts auto-save userId and reference into collection variables.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",        "value": "http://localhost:8080" },
+    { "key": "userId",         "value": "" },
+    { "key": "fundReference",  "value": "" },
+    { "key": "wdReference",    "value": "" },
+    { "key": "webhookEventId", "value": "evt-test-001" }
+  ],
+  "item": [
+    {
+      "name": "1. Create User",
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('201 Created', () => pm.response.to.have.status(201));",
+        "const body = pm.response.json();",
+        "pm.collectionVariables.set('userId', body.id);"
+      ]}}],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/users",
+        "body": { "mode": "raw", "raw": "{\n  \"fullName\": \"Damilare Abiodun\"\n}" },
+        "description": "Creates a user. Saved id → {{userId}}."
+      }
+    },
+    {
+      "name": "2. Fund Wallet (POST /wallet/fund)",
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('201 Created', () => pm.response.to.have.status(201));",
+        "const body = pm.response.json();",
+        "pm.collectionVariables.set('fundReference', body.reference);",
+        "pm.test('Virtual account returned', () => pm.expect(body.accountNumber).to.be.a('string'));",
+        "pm.test('Status is PENDING', () => pm.expect(body.status).to.eql('PENDING'));"
+      ]}}],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/wallet/fund",
+        "body": { "mode": "raw", "raw": "{\n  \"userId\": {{userId}},\n  \"amount\": 5000.00\n}" },
+        "description": "Calls Spotflow POST /virtual-accounts/temporary. Returns a temporary bank account. Transaction saved as PENDING. Reference saved → {{fundReference}}."
+      }
+    },
+    {
+      "name": "3a. Webhook — payment_successful (1st delivery)",
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200 OK', () => pm.response.to.have.status(200));"
+      ]}}],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/webhooks/spotflow",
+        "body": { "mode": "raw", "raw": "{\n  \"event\": \"payment_successful\",\n  \"data\": {\n    \"id\": \"{{webhookEventId}}\",\n    \"reference\": \"{{fundReference}}\",\n    \"spotflowReference\": \"SPF-TEST-00001\",\n    \"amount\": 5000.00,\n    \"currency\": \"NGN\",\n    \"status\": \"successful\"\n  }\n}" },
+        "description": "Simulates Spotflow delivering payment_successful.\nThe idempotency gate INSERTs event id 'evt-test-001' into processed_webhooks, credits the wallet, and marks the transaction SUCCESS."
+      }
+    },
+    {
+      "name": "3b. Webhook — EXACT DUPLICATE (idempotency test)",
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200 OK — duplicate gracefully ignored', () => pm.response.to.have.status(200));",
+        "console.log('Verify balance in step 4 is 5000, NOT 10000');"
+      ]}}],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/webhooks/spotflow",
+        "body": { "mode": "raw", "raw": "{\n  \"event\": \"payment_successful\",\n  \"data\": {\n    \"id\": \"{{webhookEventId}}\",\n    \"reference\": \"{{fundReference}}\",\n    \"spotflowReference\": \"SPF-TEST-00001\",\n    \"amount\": 5000.00,\n    \"currency\": \"NGN\",\n    \"status\": \"successful\"\n  }\n}" },
+        "description": "Identical body to 3a — same event id 'evt-test-001'. Simulates Spotflow retrying.\nExpected: UNIQUE constraint on processed_webhooks.event_id rejects the duplicate INSERT. Wallet is NOT credited again. Balance must still be 5000 in step 4."
+      }
+    },
+    {
+      "name": "4. Get User — verify balance = 5000 (not 10000)",
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "pm.test('Balance is exactly 5000 — idempotency gate worked', () => {",
+        "  pm.expect(Number(body.walletBalance)).to.eql(5000.00);",
+        "});"
+      ]}}],
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/users/{{userId}}",
+        "description": "The key assertion: walletBalance must be 5000.00, not 10000.00. If the duplicate webhook in 3b was incorrectly applied, it would be 10000."
+      }
+    },
+    {
+      "name": "5. Withdraw (POST /wallet/withdraw)",
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "const data = body.data || body;",
+        "pm.collectionVariables.set('wdReference', data.reference);",
+        "pm.test('Has reference', () => pm.expect(data.reference).to.be.a('string'));"
+      ]}}],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/wallet/withdraw",
+        "body": { "mode": "raw", "raw": "{\n  \"userId\": {{userId}},\n  \"amount\": 2000.00,\n  \"accountNumber\": \"0123456789\",\n  \"accountName\": \"Damilare Abiodun\",\n  \"bankCode\": \"058\",\n  \"narration\": \"Prize withdrawal\"\n}" },
+        "description": "Deducts balance via atomic SQL UPDATE (WHERE balance >= amount), creates a PENDING PAYOUT transaction, then calls Spotflow POST /transfers. If the Spotflow call fails the debit is reversed. Reference saved → {{wdReference}}."
+      }
+    },
+    {
+      "name": "5b. Withdraw — Insufficient Balance (error case)",
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+      ]}}],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/wallet/withdraw",
+        "body": { "mode": "raw", "raw": "{\n  \"userId\": {{userId}},\n  \"amount\": 999999.00,\n  \"accountNumber\": \"0123456789\",\n  \"accountName\": \"Damilare Abiodun\",\n  \"bankCode\": \"058\",\n  \"narration\": \"Trying to overdraw\"\n}" },
+        "description": "Amount exceeds balance. The atomic SQL UPDATE affects 0 rows → InsufficientBalanceException. No Spotflow call is made, wallet balance unchanged."
+      }
+    },
+    {
+      "name": "6. Verify Withdrawal (GET /wallet/withdraw/{reference})",
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200 OK', () => pm.response.to.have.status(200));",
+        "const body = pm.response.json();",
+        "const data = body.data || body;",
+        "pm.test('Has status', () => pm.expect(data.status).to.be.a('string'));"
+      ]}}],
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/wallet/withdraw/{{wdReference}}",
+        "description": "Polls Spotflow GET /transfers/reference/{reference} and syncs the real status back to our transaction row. Used both manually and by the reconciliation scheduler."
+      }
+    },
+    {
+      "name": "7. Webhook — Unknown Event (ignored gracefully)",
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('200 OK — unknown events do not 500', () => pm.response.to.have.status(200));"
+      ]}}],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/webhooks/spotflow",
+        "body": { "mode": "raw", "raw": "{\n  \"event\": \"payment_failed\",\n  \"data\": {\n    \"id\": \"evt-failed-001\",\n    \"reference\": \"{{fundReference}}\",\n    \"amount\": 5000.00,\n    \"currency\": \"NGN\",\n    \"status\": \"failed\"\n  }\n}" },
+        "description": "Sends an event type we don't explicitly handle. Should return 200 and log — not 500. Confirms the webhook handler is resilient to event types Spotflow may add in future."
+      }
+    }
+  ]
+}
