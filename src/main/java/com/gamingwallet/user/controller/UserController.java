@@ -12,7 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/user")
+@RequestMapping("/users")
 @RequiredArgsConstructor
 public class UserController {
     private final UserService userService;
@@ -28,6 +28,19 @@ public class UserController {
                 "User created successfully",
                 UserMapper.toResponse(user)
 
+        );
+    }
+
+    @GetMapping("/{id}")
+    public ApiResponse<UserResponse> getUser(
+            @PathVariable Long id
+    ) {
+        User user = userService.findById(id);
+    
+        return new ApiResponse<>(
+                true,
+                "User retrieved successfully",
+                UserMapper.toResponse(user)
         );
     }
 }
