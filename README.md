@@ -1,4 +1,4 @@
-# 🎮 Gaming Wallet Service
+#  Gaming Wallet Service
 
 A backend service for a gaming/tournament application that automates wallet
 funding (Pay-In) and cash prize withdrawals (Payout) using the **Spotflow API**.
